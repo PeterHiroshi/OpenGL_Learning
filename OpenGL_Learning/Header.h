@@ -67,6 +67,7 @@ void SaveAsImg();
 void SaveAsImgList(vector<Mat>& matList, string path);
 void LoadFilePathList(string rootPath, vector<string>& list);
 void PathConvert(const string& srcPath, const string& dstRoot, string& dstPath);
+void ImgAdjust(Mat src, Mat& dst);
 
 extern string srcPath;
 extern string dstRoot;

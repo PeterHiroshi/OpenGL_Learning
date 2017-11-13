@@ -45,23 +45,23 @@ int main(int argc, char** argv)
 	glutInitWindowPosition(WIN_POS_X, WIN_POS_Y);
 	glutCreateWindow("opengl learning demos");
 
-	//initialize environment
-	//EnvironmentInit();
-	//EnvironmentInit3D();
-	EnvironmentInit3D_2();
 
 	//callback functions register
 	//glutDisplayFunc(Display1);
 	//glutDisplayFunc(Display3);
 	//glutDisplayFunc(Display4);
-	glutDisplayFunc(Display5);
+	//glutDisplayFunc(Display5);
 	//glutDisplayFunc(Display6);
 	//glutDisplayFunc(Display7);
 	//glutDisplayFunc(Display8);
-	//glutDisplayFunc(Display9);
+	glutDisplayFunc(Display9);
 	glutReshapeFunc(Reshape3);
-	glutKeyboardFunc(Keyboard);
+	glutKeyboardFunc(Keyboard); 
 
+	//initialize environment
+	//EnvironmentInit();
+	//EnvironmentInit3D();
+	EnvironmentInit3D_2();
 
 	//SaveAsImg();
 
@@ -102,9 +102,8 @@ void EnvironmentInit3D()
 
 void EnvironmentInit3D_2()
 {
-	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-	//glClearColor(1.0, 0.0, 1.0, 0.0);
-	
+	//glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+	glClearColor(1.0, 1.0, 1.0, 0.0);
 
 }
 
@@ -339,9 +338,10 @@ void Display9()
 		upDir[0], upDir[1], upDir[2]);
 
 	//begin drawing
+	glTranslatef(-15.0f, 0.0f, 0.0f);
 	glColor3f(0.0f, 0.0f, 1.0f);
 	DrawCylinder(-50.0f, -10.0f, -50.0f, 10.0f, 10.0f, 50.0f);
-	glColor3f(0.0f, 1.0f, 0.0f);
+	//glColor3f(0.0f, 0.0f, 0.0f);
 	DrawJointPair(-50.0f, -10.0f, -50.0f, 5.0, 10.0f, 10.0f, 50.0f, 10.0);
 
 	SaveAsImg();
@@ -596,9 +596,16 @@ void SaveAsImg()
 	string path = "color.bmp";
 	
 	Mat imageMat;
+	//Mat imageAdjusted;
 	Mat imageMatFlip;
 
 	imageMat = saveColorData2img(pixels);
+
+	//to adjust the object into the image be centered
+	ImgAdjust(imageMat, imageMat);
+
+	imshow("adj", imageMat);
+
 	flip(imageMat, imageMatFlip, 1);
 
 	//we push 10 image mats, 5 unflipped and 5 flipped
@@ -717,5 +724,90 @@ void SaveAsImgList(vector<Mat>& matList, string path)
 
 	imshow("imglist", imgList);
 	imwrite(path, imgList);
+
+}
+
+void ImgAdjust(Mat src, Mat& dst)
+{
+	//imshow("test", src);
+
+	vector<Mat> contours(10000);
+	vector<Vec4i> hierarchy(10000);
+
+	Mat src_gray, src_binary;
+	Mat src_contoured;
+	Mat result;
+
+	cvtColor(src, src_gray, CV_BGR2GRAY);
+	threshold(src_gray, src_binary, 127, 255, CV_THRESH_BINARY);
+	src_binary.copyTo(src_contoured);
+	
+	//find contours
+	findContours(src_contoured, contours, hierarchy, CV_RETR_CCOMP,
+		CV_CHAIN_APPROX_NONE, Point(0, 0));
+
+	cout << "size = " << contours.size() << endl;
+
+	int contourIdx = -1;
+
+	for (int i = 0; i < contours.size(); ++i) {
+		double g_dConArea = contourArea(contours[i], true);
+
+		//cout << "area" << i << " = " << g_dConArea << endl;
+		if (g_dConArea > 0)
+			contourIdx = i;
+	}
+
+	//get bounding rectangle
+	Mat contour_poly;
+	Rect boundRect;
+	approxPolyDP(contours[contourIdx], contour_poly, 3, true);
+	boundRect = boundingRect(contour_poly);
+
+	result = Mat::zeros(src_binary.size(), CV_8UC3);
+	drawContours(result, contours, contourIdx, Scalar(255, 0, 255));
+	//rectangle(result, boundRect.tl(), boundRect.br(), Scalar(0, 255, 255), 2, 8, 0);
+
+	//cout << boundRect.tl().x << ", " << boundRect.tl().y << " || ";
+	//cout << boundRect.br().x << ", " << boundRect.br().y << endl;
+
+	//get target rectangle which is a little bigger than bound rectangle
+	//should make sure that the rectangle is into the source image
+	int bigger_offset = 5;
+	int tl_x = boundRect.tl().x - bigger_offset <= 0 ? 0 :
+		boundRect.tl().x - bigger_offset;
+	int tl_y = boundRect.tl().y - bigger_offset <= 0 ? 0 : 
+		boundRect.tl().y - bigger_offset;
+	int _width = boundRect.width + bigger_offset * 2;
+	int _height = boundRect.height + bigger_offset * 2;
+
+	if (tl_x + _width >= src_binary.cols)
+		_width = src_binary.cols - tl_x;
+	if (tl_y + _height >= src_binary.rows)
+		_height = src_binary.rows - tl_y;
+
+	//make target rectangle
+	Rect targetRect(tl_x, tl_y, _width, _height);
+
+	//imshow("roi", img_target);
+	//rectangle(result, targetRect.tl(), targetRect.br(), Scalar(0, 255, 255), 2, 8, 0);
+	//cout << targetRect.tl().x << ", " << targetRect.tl().y << " || ";
+	//cout << targetRect.br().x << ", " << targetRect.br().y << endl;
+
+	//imshow("bi", src_binary);
+	//imshow("res", src_contoured);
+	//imshow("result", result);
+
+	Mat img_target = src(targetRect);
+	Mat dstImg(src.size(), src.type(), Scalar(255, 255, 255));
+	
+	int ctr_x = dstImg.cols / 2;
+	int ctr_y = dstImg.rows / 2;
+	Mat imgROI = dstImg(Rect(ctr_x - img_target.cols / 2, ctr_y - img_target.rows / 2,
+		img_target.cols, img_target.rows));
+	img_target.copyTo(imgROI);
+	//imshow("dst", dstImg);
+
+	dst = dstImg;
 
 }
